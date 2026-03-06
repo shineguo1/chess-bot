@@ -139,7 +139,7 @@ async def handle_c2c_message(event_data: dict, is_test: bool = False):
             )
             logger.info(f"Replied 'hello world' to user {user_openid}")
         
-        elif content.startswith("/chess-insight"):
+        elif content.startswith("/insight"):
             result = await handle_chess_insight(content)
             if result:
                 if is_test:
@@ -149,7 +149,7 @@ async def handle_c2c_message(event_data: dict, is_test: bool = False):
                     content=result,
                     msg_id=msg_id
                 )
-                logger.info(f"Replied chess insight to user {user_openid}")
+                logger.info(f"Replied insight to user {user_openid}")
         
         return {"status": "processed"}
     except Exception as e:
@@ -165,28 +165,50 @@ async def handle_group_message(event_data: dict, is_test: bool = False):
         msg_id = message.id
         
         logger.info(f"Group message from group {group_openid}: {content}")
+        logger.info(f"Checking command - starts with /hello: {content == '/hello'}, starts with /insight: {content.startswith('/insight')}")
         
         if content == "/hello":
+            logger.info(f"Processing /hello command")
             if is_test:
                 return {"status": "processed", "reply": "hello world"}
-            await qq_bot_api.send_group_message(
-                group_openid=group_openid,
-                content="hello world",
-                msg_id=msg_id
-            )
-            logger.info(f"Replied 'hello world' to group {group_openid}")
+            try:
+                await qq_bot_api.send_group_message(
+                    group_openid=group_openid,
+                    content="hello world",
+                    msg_id=msg_id
+                )
+                logger.info(f"Replied 'hello world' to group {group_openid}")
+            except Exception as e:
+                logger.error(f"Failed to send hello message: {e}")
         
-        elif content.startswith("/chess-insight"):
+        elif content.startswith("/insight"):
+            logger.info(f"Processing /insight command")
             result = await handle_chess_insight(content)
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                await qq_bot_api.send_group_message(
-                    group_openid=group_openid,
-                    content=result,
-                    msg_id=msg_id
-                )
-                logger.info(f"Replied chess insight to group {group_openid}")
+                try:
+                    await qq_bot_api.send_group_message(
+                        group_openid=group_openid,
+                        content=result,
+                        msg_id=msg_id
+                    )
+                    logger.info(f"Replied insight to group {group_openid}")
+                except Exception as e:
+                    logger.error(f"Failed to send insight message: {e}")
+            else:
+                help_text = "使用方法: /insight -u 用户ID -c 局数\n示例: /insight -u TZZRoiOXTmVPU7FLM8YyKKzf1xF2 -c 50"
+                if is_test:
+                    return {"status": "processed", "reply": help_text}
+                try:
+                    await qq_bot_api.send_group_message(
+                        group_openid=group_openid,
+                        content=help_text,
+                        msg_id=msg_id
+                    )
+                    logger.info(f"Replied help to group {group_openid}")
+                except Exception as e:
+                    logger.error(f"Failed to send help message: {e}")
         
         return {"status": "processed"}
     except Exception as e:

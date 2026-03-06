@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import Optional, Tuple, List
+from typing import Optional, List
 from dataclasses import dataclass
 from collections import Counter
 
@@ -16,7 +16,7 @@ class ChessInsightCommand:
 
 
 def parse_chess_insight_command(content: str) -> Optional[ChessInsightCommand]:
-    pattern = r'/chess-insight\s+-u\s+(\S+)\s+-c\s+(\d+)'
+    pattern = r'/insight\s+-u\s+(\S+)\s+-c\s+(\d+)'
     match = re.search(pattern, content)
     
     if match:
