@@ -11,8 +11,7 @@ class QQBotAPI:
     def __init__(self):
         self.base_url = "https://api.sgroup.qq.com"
         self.appid = settings.qq_bot_appid
-        self.token = settings.qq_bot_token
-        self._access_token: Optional[str] = None
+        self.secret = settings.qq_bot_secret
         self._client: Optional[httpx.AsyncClient] = None
     
     async def get_client(self) -> httpx.AsyncClient:
@@ -20,29 +19,12 @@ class QQBotAPI:
             self._client = httpx.AsyncClient(timeout=10.0)
         return self._client
     
-    async def get_access_token(self) -> str:
-        if self._access_token:
-            return self._access_token
-        
-        client = await self.get_client()
-        
-        url = f"{self.base_url}/v2/oauth2/token"
-        params = {
-            "grant_type": "client_credentials",
-            "appid": self.appid,
-            "secret": settings.qq_bot_secret
+    def get_auth_header(self) -> dict:
+        return {
+            "Authorization": f"QQBot {self.secret}",
+            "Content-Type": "application/json",
+            "X-Union-Appid": self.appid
         }
-        
-        try:
-            response = await client.post(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            self._access_token = data.get("access_token")
-            logger.info("Successfully obtained access token")
-            return self._access_token
-        except Exception as e:
-            logger.error(f"Failed to get access token: {e}")
-            raise
     
     async def send_c2c_message(
         self, 
@@ -51,13 +33,9 @@ class QQBotAPI:
         msg_id: Optional[str] = None
     ) -> SendMessageResponse:
         client = await self.get_client()
-        token = await self.get_access_token()
         
         url = f"{self.base_url}/v2/users/{openid}/messages"
-        headers = {
-            "Authorization": f"QQBot {token}",
-            "Content-Type": "application/json"
-        }
+        headers = self.get_auth_header()
         
         payload = {
             "content": content,
@@ -87,13 +65,9 @@ class QQBotAPI:
         msg_id: Optional[str] = None
     ) -> SendMessageResponse:
         client = await self.get_client()
-        token = await self.get_access_token()
         
         url = f"{self.base_url}/v2/groups/{group_openid}/messages"
-        headers = {
-            "Authorization": f"QQBot {token}",
-            "Content-Type": "application/json"
-        }
+        headers = self.get_auth_header()
         
         payload = {
             "content": content,

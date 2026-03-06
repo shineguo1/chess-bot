@@ -3,7 +3,7 @@ from typing import Optional, List, Any
 
 
 class WebhookPayload(BaseModel):
-    id: str
+    id: Optional[str] = None
     op: int
     d: Any
     s: Optional[int] = None

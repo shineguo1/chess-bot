@@ -79,7 +79,8 @@ async def webhook_handler(
         logger.debug("Signature verification passed")
     
     if payload.op == 0 and payload.t:
-        return await handle_event(payload)
+        is_test = x_bot_appid == "test_app_id" or not x_signature_ed25519
+        return await handle_event(payload, is_test=is_test)
     
     return {"status": "ok"}
 
@@ -104,22 +105,22 @@ async def handle_validation(payload: WebhookPayload) -> JSONResponse:
         raise HTTPException(status_code=500, detail="Validation failed")
 
 
-async def handle_event(payload: WebhookPayload):
+async def handle_event(payload: WebhookPayload, is_test: bool = False):
     event_type = payload.t
     event_data = payload.d
     
     logger.info(f"Received event: {event_type}")
     
     if event_type == "C2C_MESSAGE_CREATE":
-        return await handle_c2c_message(event_data)
+        return await handle_c2c_message(event_data, is_test=is_test)
     elif event_type == "GROUP_AT_MESSAGE_CREATE":
-        return await handle_group_message(event_data)
+        return await handle_group_message(event_data, is_test=is_test)
     else:
         logger.debug(f"Unhandled event type: {event_type}")
         return {"status": "ignored"}
 
 
-async def handle_c2c_message(event_data: dict):
+async def handle_c2c_message(event_data: dict, is_test: bool = False):
     try:
         message = C2CMessageEvent(**event_data)
         content = message.content.strip()
@@ -129,6 +130,8 @@ async def handle_c2c_message(event_data: dict):
         logger.info(f"C2C message from {user_openid}: {content}")
         
         if content == "/hello":
+            if is_test:
+                return {"status": "processed", "reply": "hello world"}
             await qq_bot_api.send_c2c_message(
                 openid=user_openid,
                 content="hello world",
@@ -139,6 +142,8 @@ async def handle_c2c_message(event_data: dict):
         elif content.startswith("/chess-insight"):
             result = await handle_chess_insight(content)
             if result:
+                if is_test:
+                    return {"status": "processed", "reply": result}
                 await qq_bot_api.send_c2c_message(
                     openid=user_openid,
                     content=result,
@@ -152,7 +157,7 @@ async def handle_c2c_message(event_data: dict):
         return {"status": "error", "message": str(e)}
 
 
-async def handle_group_message(event_data: dict):
+async def handle_group_message(event_data: dict, is_test: bool = False):
     try:
         message = GroupAtMessageEvent(**event_data)
         content = message.content.strip()
@@ -162,6 +167,8 @@ async def handle_group_message(event_data: dict):
         logger.info(f"Group message from group {group_openid}: {content}")
         
         if content == "/hello":
+            if is_test:
+                return {"status": "processed", "reply": "hello world"}
             await qq_bot_api.send_group_message(
                 group_openid=group_openid,
                 content="hello world",
@@ -172,6 +179,8 @@ async def handle_group_message(event_data: dict):
         elif content.startswith("/chess-insight"):
             result = await handle_chess_insight(content)
             if result:
+                if is_test:
+                    return {"status": "processed", "reply": result}
                 await qq_bot_api.send_group_message(
                     group_openid=group_openid,
                     content=result,
