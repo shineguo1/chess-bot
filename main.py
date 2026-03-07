@@ -16,7 +16,7 @@ from models import (
 from signature import SignatureVerifier
 from api_client import qq_bot_api
 from logger import logger
-from command_handler import handle_chess_insight, handle_bind
+from command_handler import handle_chess_insight, handle_bind, handle_env, handle_pkm
 from user_binding import user_binding_storage
 
 signature_verifier = SignatureVerifier(settings.qq_bot_secret)
@@ -172,6 +172,30 @@ async def handle_c2c_message(event_data: dict, is_test: bool = False):
                     msg_id=msg_id
                 )
         
+        elif content.startswith("/env"):
+            result = await handle_env(content)
+            if result:
+                if is_test:
+                    return {"status": "processed", "reply": result}
+                await qq_bot_api.send_c2c_message(
+                    openid=user_openid,
+                    content=result,
+                    msg_id=msg_id
+                )
+                logger.info(f"Replied env to user {user_openid}")
+        
+        elif content.startswith("/pkm"):
+            result = await handle_pkm(content)
+            if result:
+                if is_test:
+                    return {"status": "processed", "reply": result}
+                await qq_bot_api.send_c2c_message(
+                    openid=user_openid,
+                    content=result,
+                    msg_id=msg_id
+                )
+                logger.info(f"Replied pkm to user {user_openid}")
+        
         return {"status": "processed"}
     except Exception as e:
         logger.error(f"Failed to handle C2C message: {e}")
@@ -243,6 +267,36 @@ async def handle_group_message(event_data: dict, is_test: bool = False):
                     logger.info(f"Replied help to group {group_openid}")
                 except Exception as e:
                     logger.error(f"Failed to send help message: {e}")
+        
+        elif content.startswith("/env"):
+            result = await handle_env(content)
+            if result:
+                if is_test:
+                    return {"status": "processed", "reply": result}
+                try:
+                    await qq_bot_api.send_group_message(
+                        group_openid=group_openid,
+                        content=result,
+                        msg_id=msg_id
+                    )
+                    logger.info(f"Replied env to group {group_openid}")
+                except Exception as e:
+                    logger.error(f"Failed to send env message: {e}")
+        
+        elif content.startswith("/pkm"):
+            result = await handle_pkm(content)
+            if result:
+                if is_test:
+                    return {"status": "processed", "reply": result}
+                try:
+                    await qq_bot_api.send_group_message(
+                        group_openid=group_openid,
+                        content=result,
+                        msg_id=msg_id
+                    )
+                    logger.info(f"Replied pkm to group {group_openid}")
+                except Exception as e:
+                    logger.error(f"Failed to send pkm message: {e}")
         
         return {"status": "processed"}
     except Exception as e:

@@ -61,4 +61,4 @@ class SendMessageRequest(BaseModel):
 
 class SendMessageResponse(BaseModel):
     id: str
-    timestamp: int
+    timestamp: str

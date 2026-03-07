@@ -1,15 +1,24 @@
+1. 中文翻译。
+接口： GET https://pokev9.52kx.net/locales/zh/translation.json
+我下载了一份样例数据帮你了解数据格式和意义，位置 `resources\translation\translation-example.json` 。我希望调用接口后在本地保存一份json文件，这样就不用反复查询。要求保留下载的日期。懒加载每日更新，即发现数据的日期＜今天时，重新拉取数据保存到本地。注意要清理历史文件。
+其中pkm是pokemon的缩写，意思是宝可梦，也是游戏的队伍成员。
 
-https://www.pokemon-auto-chess.com/meta-v2
+2. 环境数据。
+接口： GET https://www.pokemon-auto-chess.com/meta-v2
 关键数据：
-- cluster_id：集群ID
 - count：环境数量
 - winrate：胜率
 - mean_rank：平均排名
 - synergies： 共鸣组合
 - mean_team：平均团队
 
-# response
+我希望这个接口的数据也做成本地文件缓存，文件名是 `resources\meta-v2\meta-v2.json` 。要求保留下载的日期。懒加载每日更新，即发现数据的日期＜今天时，重新拉取数据保存到本地。注意要清理历史文件。
 
+另外支持QQ机器人指令“/env -page 页码” 或者 “/env -p 页码”， “/env -h” 或者 “/env -help”时显示指令的帮助信息。
+指令返回关键数据，要求按平均排名排序，每页显示10条数据。没有页码参数时默认返回第一页(前10条)，以此类推。
+
+我下载了一份样例数据帮你了解数据格式和意义，位置 `resources\meta-v2\meta-v2-example.json`, 简洁版如下
+ - response：
 ```json
 [
     {
@@ -574,3 +583,41 @@ https://www.pokemon-auto-chess.com/meta-v2
     }
 ]
 ```
+
+3. 宝可梦环境数据
+接口： GET https://www.pokemon-auto-chess.com/meta/pokemons
+
+我希望这个接口的数据也做成本地文件缓存，文件名是 `resources\meta-pkm\pokemons.json` 。要求保留下载的日期。懒加载每日更新，即发现数据的日期＜今天时，重新拉取数据保存到本地。注意要清理历史文件。
+
+
+
+GET 请求返回样例, 下面表示是`LEVEL_BALL`分级，`ABOMASNOW`暴雪王的环境信息
+
+我下载了一份样例数据帮你了解数据格式和意义，位置 `resources\meta-pkm\pokemons-example.json`, 简洁版如下
+```json
+[{"_id":"6993e287c0bde49f15a077f4","tier":"LEVEL_BALL","pokemons":{"ABOMASNOW":{"items":["MUSCLE_BAND","KINGS_ROCK","WONDER_BOX"],"rank":2.78,"count":1595,"name":"ABOMASNOW","item_count":0.83}]
+```
+分级信息如下
+    ```JSON
+    "elorank": {
+		"LEVEL_BALL": "等级球 elo>0",
+		"NET_BALL": "捕网球 elo>1050",
+		"SAFARI_BALL": "狩猎球 elo>1100",
+		"LOVE_BALL": "甜蜜球 elo>1150",
+		"PREMIER_BALL": "纪念球 elo>1200",
+		"QUICK_BALL": "先机球 elo>1250",
+		"POKE_BALL": "精灵球 elo>1300",
+		"SUPER_BALL": "超级球 elo>1350",
+		"ULTRA_BALL": "高级球 elo>1400",
+		"MASTER_BALL": "大师球 elo>1500",
+		"BEAST_BALL": "究极球 elo>1600"
+	}
+    ```
+
+另外支持QQ机器人指令“/pkm -n 君主蛇 -r 1200” 支持中文名和英文名，根据翻译文件中的 pkm[] 对照. -n表示name，-r表示rank。允许没有-r，表示不筛选数据,有r的话，就从对应的elo分级中获取数据
+“/pkm -h” 或者 “/pkm -help”时显示指令的帮助信息。	
+    
+要求返回宝可梦的`平均名次rank、出场次数count、平均道具数量item_count、道具items`当然，要全部通过translation.json翻译成中文。映射不到时才用英文缺省返回。
+
+
+4. 另外补充原来一下“/insight” 命令中 -h 或者 -help时，返回帮助信息。

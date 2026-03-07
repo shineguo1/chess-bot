@@ -12,3 +12,9 @@ logs/
 dist/
 build/
 data/
+resources/translation/translation.json
+resources/translation/translation.json.meta
+resources/meta-v2/meta-v2.json
+resources/meta-v2/meta-v2.json.meta
+resources/meta-pkm/pokemons.json
+resources/meta-pkm/pokemons.json.meta
