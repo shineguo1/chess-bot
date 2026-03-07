@@ -16,8 +16,8 @@ from models import (
 from signature import SignatureVerifier
 from api_client import qq_bot_api
 from logger import logger
-
-from command_handler import handle_chess_insight
+from command_handler import handle_chess_insight, handle_bind
+from user_binding import user_binding_storage
 
 signature_verifier = SignatureVerifier(settings.qq_bot_secret)
 
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="QQ Bot Webhook Service",
-    description="QQ机器人Webhook服务 - 响应/insight命令",
+    description="QQ机器人Webhook服务 - 响应/insight和/bind命令",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -139,8 +139,20 @@ async def handle_c2c_message(event_data: dict, is_test: bool = False):
             )
             logger.info(f"Replied 'hello world' to user {user_openid}")
         
+        elif content.startswith("/bind"):
+            result = await handle_bind(content, user_openid)
+            if result:
+                if is_test:
+                    return {"status": "processed", "reply": result}
+                await qq_bot_api.send_c2c_message(
+                    openid=user_openid,
+                    content=result,
+                    msg_id=msg_id
+                )
+                logger.info(f"Replied bind result to user {user_openid}")
+        
         elif content.startswith("/insight"):
-            result = await handle_chess_insight(content)
+            result = await handle_chess_insight(content, user_openid)
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
@@ -150,6 +162,15 @@ async def handle_c2c_message(event_data: dict, is_test: bool = False):
                     msg_id=msg_id
                 )
                 logger.info(f"Replied insight to user {user_openid}")
+            else:
+                help_text = "使用方法:\n/bind -u 用户ID - 绑定游戏ID\n/insight [-c 局数] - 查询战绩(默认50局)\n/insight -u 用户ID -c 局数 - 指定用户查询"
+                if is_test:
+                    return {"status": "processed", "reply": help_text}
+                await qq_bot_api.send_c2c_message(
+                    openid=user_openid,
+                    content=help_text,
+                    msg_id=msg_id
+                )
         
         return {"status": "processed"}
     except Exception as e:
@@ -162,13 +183,12 @@ async def handle_group_message(event_data: dict, is_test: bool = False):
         message = GroupAtMessageEvent(**event_data)
         content = message.content.strip()
         group_openid = message.group_openid
+        member_openid = message.author.member_openid
         msg_id = message.id
         
-        logger.info(f"Group message from group {group_openid}: {content}")
-        logger.info(f"Checking command - starts with /hello: {content == '/hello'}, starts with /insight: {content.startswith('/insight')}")
+        logger.info(f"Group message from group {group_openid}, member {member_openid}: {content}")
         
         if content == "/hello":
-            logger.info(f"Processing /hello command")
             if is_test:
                 return {"status": "processed", "reply": "hello world"}
             try:
@@ -181,9 +201,23 @@ async def handle_group_message(event_data: dict, is_test: bool = False):
             except Exception as e:
                 logger.error(f"Failed to send hello message: {e}")
         
+        elif content.startswith("/bind"):
+            result = await handle_bind(content, member_openid)
+            if result:
+                if is_test:
+                    return {"status": "processed", "reply": result}
+                try:
+                    await qq_bot_api.send_group_message(
+                        group_openid=group_openid,
+                        content=result,
+                        msg_id=msg_id
+                    )
+                    logger.info(f"Replied bind result to group {group_openid}")
+                except Exception as e:
+                    logger.error(f"Failed to send bind message: {e}")
+        
         elif content.startswith("/insight"):
-            logger.info(f"Processing /insight command")
-            result = await handle_chess_insight(content)
+            result = await handle_chess_insight(content, member_openid)
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
@@ -197,7 +231,7 @@ async def handle_group_message(event_data: dict, is_test: bool = False):
                 except Exception as e:
                     logger.error(f"Failed to send insight message: {e}")
             else:
-                help_text = "使用方法: /insight -u 用户ID -c 局数\n示例: /insight -u TZZRoiOXTmVPU7FLM8YyKKzf1xF2 -c 50"
+                help_text = "使用方法:\n/bind -u 用户ID - 绑定游戏ID\n/insight [-c 局数] - 查询战绩(默认50局)\n/insight -u 用户ID -c 局数 - 指定用户查询"
                 if is_test:
                     return {"status": "processed", "reply": help_text}
                 try:

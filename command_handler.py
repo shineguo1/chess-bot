@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from collections import Counter
 
 from chess_api import pokemon_chess_api, GameRecord
+from user_binding import user_binding_storage
 
 logger = logging.getLogger(__name__)
 
@@ -15,13 +16,40 @@ class ChessInsightCommand:
     count: int
 
 
-def parse_chess_insight_command(content: str) -> Optional[ChessInsightCommand]:
-    pattern = r'/insight\s+-u\s+(\S+)\s+-c\s+(\d+)'
+@dataclass
+class BindCommand:
+    user_id: str
+
+
+def parse_bind_command(content: str) -> Optional[BindCommand]:
+    pattern = r'/bind\s+-u\s+(\S+)'
     match = re.search(pattern, content)
     
     if match:
         user_id = match.group(1)
-        count = int(match.group(2))
+        return BindCommand(user_id=user_id)
+    
+    return None
+
+
+def parse_chess_insight_command(content: str, qq_openid: Optional[str] = None) -> Optional[ChessInsightCommand]:
+    pattern = r'/insight(?:\s+-u\s+(\S+))?(?:\s+-c\s+(\d+))?'
+    match = re.search(pattern, content)
+    
+    if match:
+        user_id = match.group(1)
+        count_str = match.group(2)
+        
+        if user_id is None:
+            if qq_openid:
+                user_id = user_binding_storage.get_user_id(qq_openid)
+                if user_id is None:
+                    return None
+            else:
+                return None
+        
+        count = int(count_str) if count_str else 50
+        
         return ChessInsightCommand(user_id=user_id, count=count)
     
     return None
@@ -69,8 +97,22 @@ def calculate_rank_statistics(records: List[GameRecord]) -> str:
     return result
 
 
-async def handle_chess_insight(content: str) -> Optional[str]:
-    command = parse_chess_insight_command(content)
+async def handle_bind(content: str, qq_openid: str) -> Optional[str]:
+    command = parse_bind_command(content)
+    
+    if not command:
+        return None
+    
+    try:
+        user_binding_storage.bind(qq_openid, command.user_id)
+        return f"✅ 绑定成功！您的游戏ID已绑定为: {command.user_id}"
+    except Exception as e:
+        logger.error(f"Failed to bind user: {e}")
+        return f"绑定失败: {str(e)}"
+
+
+async def handle_chess_insight(content: str, qq_openid: Optional[str] = None) -> Optional[str]:
+    command = parse_chess_insight_command(content, qq_openid)
     
     if not command:
         return None
