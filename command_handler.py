@@ -3,6 +3,7 @@ import logging
 from typing import Optional, List
 from dataclasses import dataclass
 from collections import Counter
+from datetime import datetime
 
 from chess_api import pokemon_chess_api, GameRecord
 from user_binding import user_binding_storage
@@ -15,11 +16,13 @@ logger = logging.getLogger(__name__)
 class ChessInsightCommand:
     user_id: str
     count: int
+    server: Optional[str] = None
 
 
 @dataclass
 class BindCommand:
     user_id: str
+    server: Optional[str] = None
 
 
 @dataclass
@@ -36,16 +39,18 @@ class PkmCommand:
 INSIGHT_HELP = """📖 /insight 命令帮助
 
 用法:
-  /insight [-u 用户ID] [-c 局数]
+  /insight [-u 用户ID] [-c 局数] [-s 服务器]
 
 参数:
-  -u 用户ID  指定查询的用户ID（如未绑定则必填）
-  -c 局数    查询的局数（默认50局）
+  -u 用户ID    指定查询的用户ID（如未绑定则必填）
+  -c 局数      查询的局数（默认50局）
+  -s 服务器    指定服务器（cn=国服，默认国际服）
 
 示例:
-  /insight              查询绑定的用户最近50局战绩
-  /insight -c 100       查询绑定的用户最近100局战绩
-  /insight -u ABC123    查询指定用户最近50局战绩
+  /insight                    查询绑定的用户最近50局战绩
+  /insight -c 100             查询绑定的用户最近100局战绩
+  /insight -u ABC123          查询指定用户最近50局战绩
+  /insight -u ABC123 -s cn    查询国服用户战绩
 
 提示: 先使用 /bind -u 用户ID 绑定账号"""
 
@@ -87,41 +92,104 @@ ELO分级对照:
   /pkm -n 君主蛇 -r 1200  查询纪念球分级的数据"""
 
 
+BIND_HELP = """📖 /bind 命令帮助
+
+用法:
+  /bind -u 用户ID [-s 服务器]
+
+参数:
+  -u 用户ID    游戏用户ID
+  -s 服务器    指定服务器（cn=国服，默认国际服）
+
+示例:
+  /bind -u ABC123           绑定国际服ID
+  /bind -u gitee_123 -s cn  绑定国服ID
+
+提示:
+  - `用户ID`请在 [个人资料 -> 账号] 处查看，并非`名字`
+  - 绑定后使用 /insight 无需再输入用户ID
+  - 可同时绑定国服和国际服ID"""
+
+
+HELP_TEXT = """🤖 QQ机器人命令帮助
+
+📋 可用命令:
+
+  /bind -u 用户ID [-s 服务器]
+    绑定游戏ID到QQ账号
+    -s cn 绑定国服ID（默认国际服）
+
+  /insight [-u 用户ID] [-c 局数] [-s 服务器]
+    查询战绩统计
+    -s cn 查询国服数据
+
+  /env [-p 页码]
+    查询环境队伍组合数据
+
+  /pkm 名称 [-r elo]
+    查询宝可梦环境数据
+
+  /hello
+    测试机器人是否在线
+
+💡 提示:
+  - 使用 /命令 -h 查看详细帮助
+  - 例如: /insight -h
+"""
+
+
 def parse_bind_command(content: str) -> Optional[BindCommand]:
-    pattern = r'/bind\s+-u\s+(\S+)'
+    if re.search(r'/bind\s+(-h|--help)', content):
+        return None
+    
+    pattern = r'/bind\s+-u\s+(\S+)(?:\s+-(?:s|server)\s+(\S+))?'
     match = re.search(pattern, content)
     
     if match:
         user_id = match.group(1)
-        return BindCommand(user_id=user_id)
+        server = match.group(2)
+        server = server if server == "cn" else "global"
+        return BindCommand(user_id=user_id, server=server)
     
     return None
 
 
 def parse_chess_insight_command(content: str, qq_openid: Optional[str] = None) -> Optional[ChessInsightCommand]:
-    pattern = r'/insight(?:\s+-u\s+(\S+))?(?:\s+-c\s+(\d+))?'
+    if "老吧" in content:
+        pattern = r'/insight\s+老吧(?:\s+-c\s+(\d+))?'
+        match = re.search(pattern, content)
+        if match:
+            count_str = match.group(1)
+            count = int(count_str) if count_str else 50
+            return ChessInsightCommand(user_id="gitee_16656474", count=count, server="cn")
+    
+    pattern = r'/insight(?:\s+-u\s+(\S+))?(?:\s+-c\s+(\d+))?(?:\s+-(?:s|server)\s+(\S+))?'
     match = re.search(pattern, content)
     
     if match:
         user_id = match.group(1)
         count_str = match.group(2)
+        server = match.group(3)
+        
+        server = server if server == "cn" else "global"
         
         if user_id is None:
             if qq_openid:
-                user_id = user_binding_storage.get_user_id(qq_openid)
+                user_id = user_binding_storage.get_user_id(qq_openid, server)
                 if user_id is None:
                     return None
             else:
                 return None
         
         count = int(count_str) if count_str else 50
+        server_param = server if server == "cn" else None
         
-        return ChessInsightCommand(user_id=user_id, count=count)
+        return ChessInsightCommand(user_id=user_id, count=count, server=server_param)
     
     return None
 
 
-def calculate_rank_statistics(records: List[GameRecord]) -> str:
+def calculate_rank_statistics(records: List[GameRecord], first_page_records: List[GameRecord] = None) -> str:
     if not records:
         return "未找到游戏记录"
     
@@ -147,7 +215,22 @@ def calculate_rank_statistics(records: List[GameRecord]) -> str:
         percentage = (count / total_games) * 100
         rank_distribution.append(f"第{rank}名: {count}局 ({percentage:.1f}%)")
     
-    result = f"""📊 近{total_games}局战绩统计
+    extra_info = ""
+    if first_page_records and len(first_page_records) > 0:
+        latest_record = first_page_records[0]
+        latest_elo = latest_record.elo if latest_record.elo else "N/A"
+        latest_time = datetime.fromtimestamp(latest_record.time / 1000).strftime("%Y-%m-%d %H:%M")
+        
+        recent_10_ranks = [str(r.rank) for r in first_page_records[:10]]
+        recent_10_str = "".join(reversed(recent_10_ranks))
+        
+        extra_info = f"""
+📌 最新状态:
+   ELO分数: {latest_elo}
+   游戏时间: {latest_time}
+   最近10局排名: [{recent_10_str}]"""
+    
+    result = f"""📊 近{total_games}局战绩统计{extra_info}
 
 🏆 平均排名: {avg_rank:.2f}
 🥇 最好成绩: 第{best_rank}名
@@ -164,14 +247,18 @@ def calculate_rank_statistics(records: List[GameRecord]) -> str:
 
 
 async def handle_bind(content: str, qq_openid: str) -> Optional[str]:
+    if re.search(r'/bind\s+(-h|--help)', content):
+        return BIND_HELP
+    
     command = parse_bind_command(content)
     
     if not command:
         return None
     
     try:
-        user_binding_storage.bind(qq_openid, command.user_id)
-        return f"✅ 绑定成功！您的游戏ID已绑定为: {command.user_id}"
+        server_label = "国服" if command.server == "cn" else "国际服"
+        user_binding_storage.bind(qq_openid, command.user_id, command.server)
+        return f"✅ 绑定成功！您的{server_label}游戏ID已绑定为: {command.user_id}"
     except Exception as e:
         logger.error(f"Failed to bind user: {e}")
         return f"绑定失败: {str(e)}"
@@ -187,16 +274,25 @@ async def handle_chess_insight(content: str, qq_openid: Optional[str] = None) ->
         return None
     
     try:
+        first_page_records = await pokemon_chess_api.get_game_history(
+            user_id=command.user_id,
+            page=1,
+            server=command.server
+        )
+        
         records = await pokemon_chess_api.get_multiple_pages(
             user_id=command.user_id,
-            total_games=command.count
+            total_games=command.count,
+            server=command.server
         )
         
         if not records:
-            return f"未找到用户 {command.user_id} 的游戏记录"
+            server_name = "国服" if command.server == "cn" else "国际服"
+            return f"未找到用户 {command.user_id} 在{server_name}的游戏记录"
         
-        statistics = calculate_rank_statistics(records)
-        return statistics
+        statistics = calculate_rank_statistics(records, first_page_records)
+        server_label = " [国服]" if command.server == "cn" else ""
+        return f"{statistics}{server_label}"
         
     except Exception as e:
         logger.error(f"Failed to handle chess insight: {e}")

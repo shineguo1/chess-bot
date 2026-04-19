@@ -18,6 +18,7 @@ class GameRecord:
 class PokemonAutoChessAPI:
     def __init__(self):
         self.base_url = "https://pokemon-auto-chess.com"
+        self.cn_base_url = "https://daascveqarqwe-dev.workol.cn"
         self._client: Optional[httpx.AsyncClient] = None
     
     async def get_client(self) -> httpx.AsyncClient:
@@ -28,12 +29,19 @@ class PokemonAutoChessAPI:
     async def get_game_history(
         self, 
         user_id: str, 
-        page: int = 1
+        page: int = 1,
+        server: str = None
     ) -> List[GameRecord]:
         client = await self.get_client()
         
         timestamp = int(time.time())
-        url = f"{self.base_url}/game-history/{user_id}"
+        
+        if server == "cn":
+            base_url = self.cn_base_url
+        else:
+            base_url = self.base_url
+        
+        url = f"{base_url}/game-history/{user_id}"
         
         params = {
             "page": page,
@@ -55,7 +63,7 @@ class PokemonAutoChessAPI:
                 )
                 records.append(record)
             
-            logger.info(f"Fetched {len(records)} game records for user {user_id}")
+            logger.info(f"Fetched {len(records)} game records for user {user_id} from {base_url}")
             return records
         except httpx.HTTPStatusError as e:
             logger.error(f"Failed to fetch game history: {e.response.status_code}")
@@ -67,7 +75,8 @@ class PokemonAutoChessAPI:
     async def get_multiple_pages(
         self, 
         user_id: str, 
-        total_games: int
+        total_games: int,
+        server: str = None
     ) -> List[GameRecord]:
         all_records = []
         page = 1
@@ -76,7 +85,7 @@ class PokemonAutoChessAPI:
         pages_needed = (total_games + per_page - 1) // per_page
         
         for _ in range(pages_needed):
-            records = await self.get_game_history(user_id, page)
+            records = await self.get_game_history(user_id, page, server=server)
             if not records:
                 break
             all_records.extend(records)
