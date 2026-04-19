@@ -104,6 +104,24 @@ class ThirdPartyAPI:
                 return eng_name
         return None
     
+    async def search_pokemon_names(self, keyword: str) -> List[Dict[str, str]]:
+        translation = await self.get_translation()
+        if not translation:
+            return []
+        
+        pkm_dict = translation.get("pkm", {})
+        
+        results = []
+        for en_name, cn_name in pkm_dict.items():
+            if keyword in cn_name:
+                results.append({
+                    "cn": cn_name,
+                    "en": en_name
+                })
+        
+        results.sort(key=lambda x: x["cn"])
+        return results[:20]
+    
     async def get_meta_v2(self) -> Optional[List[Dict]]:
         return await cache_manager.fetch_and_cache(
             META_V2_URL,

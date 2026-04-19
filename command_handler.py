@@ -111,6 +111,22 @@ BIND_HELP = """📖 /bind 命令帮助
   - 可同时绑定国服和国际服ID"""
 
 
+SEARCH_HELP = """📖 /search 命令帮助
+
+用法:
+  /search <关键词>
+
+功能:
+  模糊搜索宝可梦名字
+
+示例:
+  /search 皮     搜索名字含"皮"的宝可梦
+  /search 龙     搜索名字含"龙"的宝可梦
+  /search pikachu  搜索英文名含"pikachu"的宝可梦
+
+💡 提示: 使用 /pkm -n <名称> 查询宝可梦详情"""
+
+
 HELP_TEXT = """🤖 QQ机器人命令帮助
 
 📋 可用命令:
@@ -128,6 +144,9 @@ HELP_TEXT = """🤖 QQ机器人命令帮助
 
   /pkm 名称 [-r elo]
     查询宝可梦环境数据
+
+  /search <关键词>
+    搜索宝可梦名字
 
   /hello
     测试机器人是否在线
@@ -428,3 +447,40 @@ async def handle_pkm(content: str) -> Optional[str]:
     except Exception as e:
         logger.error(f"Failed to handle pkm: {e}")
         return f"查询失败: {str(e)}"
+
+
+def parse_search_command(content: str) -> Optional[str]:
+    pattern = r'/search\s+(.+)'
+    match = re.search(pattern, content)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+async def handle_search(content: str) -> Optional[str]:
+    if re.search(r'/search\s+(-h|--help)', content):
+        return SEARCH_HELP
+    
+    keyword = parse_search_command(content)
+    
+    if not keyword:
+        return None
+    
+    try:
+        results = await third_party_api.search_pokemon_names(keyword)
+        
+        if not results:
+            return f"未找到名字包含\"{keyword}\"的宝可梦"
+        
+        lines = [f"🔍 搜索 \"{keyword}\" 的结果（共{len(results)}条）:\n"]
+        
+        for i, item in enumerate(results, 1):
+            lines.append(f"{i}. {item['cn']} ({item['en']})")
+        
+        lines.append("\n💡 提示: 使用 /pkm -n <名称> 查询宝可梦详情")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"Failed to handle search: {e}")
+        return f"搜索失败: {str(e)}"
