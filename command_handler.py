@@ -295,7 +295,7 @@ async def calculate_top5_pokemons(records: List[GameRecord]) -> str:
 
     translation = await third_party_api.get_translation()
 
-    lines = ["\n🐾 常用宝可梦 Top5:"]
+    lines = ["\n\n🐾 常用宝可梦 Top5:"]
     for i, (pokemon_name, count) in enumerate(top5, 1):
         translated_name = third_party_api.translate_pokemon(pokemon_name, translation)
         lines.append(f"   {i}. {translated_name}: {count}次")
