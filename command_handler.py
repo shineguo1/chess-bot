@@ -280,7 +280,7 @@ def calculate_rank_statistics(records: List[GameRecord], first_page_records: Lis
     return result
 
 
-def calculate_top5_pokemons(records: List[GameRecord]) -> str:
+async def calculate_top5_pokemons(records: List[GameRecord]) -> str:
     pokemon_counter = Counter()
 
     for record in records:
@@ -293,9 +293,12 @@ def calculate_top5_pokemons(records: List[GameRecord]) -> str:
 
     top5 = pokemon_counter.most_common(5)
 
+    translation = await third_party_api.get_translation()
+
     lines = ["\n🐾 常用宝可梦 Top5:"]
     for i, (pokemon_name, count) in enumerate(top5, 1):
-        lines.append(f"   {i}. {pokemon_name}: {count}次")
+        translated_name = third_party_api.translate_pokemon(pokemon_name, translation)
+        lines.append(f"   {i}. {translated_name}: {count}次")
 
     return "\n".join(lines)
 
@@ -371,7 +374,7 @@ async def handle_chess_insight(content: str, qq_openid: Optional[str] = None) ->
             )
 
         statistics = calculate_rank_statistics(records, first_page_records, max_elo=new_max_elo)
-        top5_pokemons = calculate_top5_pokemons(records)
+        top5_pokemons = await calculate_top5_pokemons(records)
         server_label = " [国服]" if command.server == "cn" else ""
 
         return f"{statistics}{top5_pokemons}{server_label}"
