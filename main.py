@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import JSONResponse
 from typing import Optional
+from collections import deque
+import time
 
 from config import settings
 from models import (
@@ -24,6 +26,16 @@ signature_verifier = SignatureVerifier(settings.qq_bot_secret)
 
 COMMAND_TIMEOUT = 7.0
 ERROR_RETRY_MSG = "⚠️ 命令执行超时或出错，请稍后重试"
+
+MAX_PROCESSED_MESSAGES = 1000
+processed_messages = deque(maxlen=MAX_PROCESSED_MESSAGES)
+
+
+def is_message_processed(msg_id: str) -> bool:
+    if msg_id in processed_messages:
+        return True
+    processed_messages.append(msg_id)
+    return False
 
 
 async def run_with_timeout(coro, timeout: float = COMMAND_TIMEOUT):
@@ -141,6 +153,10 @@ async def handle_c2c_message(event_data: dict, is_test: bool = False):
         content = message.content.strip()
         user_openid = message.author.user_openid
         msg_id = message.id
+        
+        if is_message_processed(msg_id):
+            logger.info(f"Message {msg_id} already processed, skipping")
+            return {"status": "duplicate"}
         
         logger.info(f"C2C message from {user_openid}: {content}")
         
@@ -307,6 +323,10 @@ async def handle_group_message(event_data: dict, is_test: bool = False):
         group_openid = message.group_openid
         member_openid = message.author.member_openid
         msg_id = message.id
+        
+        if is_message_processed(msg_id):
+            logger.info(f"Message {msg_id} already processed, skipping")
+            return {"status": "duplicate"}
         
         logger.info(f"Group message from group {group_openid}, member {member_openid}: {content}")
         

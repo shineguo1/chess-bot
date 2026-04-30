@@ -108,6 +108,15 @@ class QQBotAPI:
             if isinstance(e, httpx.HTTPStatusError):
                 if 400 <= e.response.status_code < 500:
                     error_text = e.response.text
+                    try:
+                        error_data = e.response.json()
+                        error_code = error_data.get("err_code")
+                        if error_code == 40054005:
+                            logger.warning("Message deduplicated, not retrying")
+                            return False
+                    except:
+                        pass
+                    
                     if "token" in error_text.lower() or "expire" in error_text.lower():
                         self._access_token = None
                         logger.info("Token expired, clearing cache for retry")
@@ -157,6 +166,15 @@ class QQBotAPI:
             if isinstance(e, httpx.HTTPStatusError):
                 if 400 <= e.response.status_code < 500:
                     error_text = e.response.text
+                    try:
+                        error_data = e.response.json()
+                        error_code = error_data.get("err_code")
+                        if error_code == 40054005:
+                            logger.warning("Message deduplicated, not retrying")
+                            return False
+                    except:
+                        pass
+                    
                     if "token" in error_text.lower() or "expire" in error_text.lower():
                         self._access_token = None
                         logger.info("Token expired, clearing cache for retry")
