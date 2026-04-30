@@ -1,15 +1,26 @@
 import re
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict
 from dataclasses import dataclass
 from collections import Counter
 from datetime import datetime
 
 from chess_api import pokemon_chess_api, GameRecord
 from user_binding import user_binding_storage
+from user_stats_storage import user_stats_storage
 from third_party_api import third_party_api
 
 logger = logging.getLogger(__name__)
+
+
+def parse_arguments(content: str) -> Dict[str, str]:
+    args = {}
+    pattern = r'-(?P<key>[a-z]+)\s+(?P<value>\S+)'
+    for match in re.finditer(pattern, content):
+        key = match.group('key')
+        value = match.group('value')
+        args[key] = value
+    return args
 
 
 @dataclass
@@ -45,6 +56,11 @@ INSIGHT_HELP = """📖 /insight 命令帮助
   -u 用户ID    指定查询的用户ID（如未绑定则必填）
   -c 局数      查询的局数（默认50局）
   -s 服务器    指定服务器（cn=国服，默认国际服）
+
+功能:
+  - 查询战绩统计（平均排名、吃鸡率等）
+  - 统计常用宝可梦 Top5
+  - 记录历史最高 ELO
 
 示例:
   /insight                    查询绑定的用户最近50局战绩
@@ -161,94 +177,93 @@ def parse_bind_command(content: str) -> Optional[BindCommand]:
     if re.search(r'/bind\s+(-h|--help)', content):
         return None
     
-    pattern = r'/bind\s+-u\s+(\S+)(?:\s+-(?:s|server)\s+(\S+))?'
-    match = re.search(pattern, content)
+    args = parse_arguments(content)
     
-    if match:
-        user_id = match.group(1)
-        server = match.group(2)
-        server = server if server == "cn" else "global"
-        return BindCommand(user_id=user_id, server=server)
+    user_id = args.get('u')
+    if user_id is None:
+        return None
     
-    return None
+    server = args.get('s') or args.get('server')
+    server = server if server == "cn" else "global"
+    
+    return BindCommand(user_id=user_id, server=server)
 
 
 def parse_chess_insight_command(content: str, qq_openid: Optional[str] = None) -> Optional[ChessInsightCommand]:
     if "老吧" in content:
-        pattern = r'/insight\s+老吧(?:\s+-c\s+(\d+))?'
-        match = re.search(pattern, content)
-        if match:
-            count_str = match.group(1)
-            count = int(count_str) if count_str else 50
-            return ChessInsightCommand(user_id="gitee_16656474", count=count, server="cn")
-    
-    pattern = r'/insight(?:\s+-u\s+(\S+))?(?:\s+-c\s+(\d+))?(?:\s+-(?:s|server)\s+(\S+))?'
-    match = re.search(pattern, content)
-    
-    if match:
-        user_id = match.group(1)
-        count_str = match.group(2)
-        server = match.group(3)
-        
-        server = server if server == "cn" else "global"
-        
-        if user_id is None:
-            if qq_openid:
-                user_id = user_binding_storage.get_user_id(qq_openid, server)
-                if user_id is None:
-                    return None
-            else:
-                return None
-        
+        args = parse_arguments(content)
+        count_str = args.get('c')
         count = int(count_str) if count_str else 50
-        server_param = server if server == "cn" else None
-        
-        return ChessInsightCommand(user_id=user_id, count=count, server=server_param)
+        return ChessInsightCommand(user_id="gitee_16656474", count=count, server="cn")
     
-    return None
+    args = parse_arguments(content)
+    
+    user_id = args.get('u')
+    count_str = args.get('c')
+    server = args.get('s') or args.get('server')
+    
+    server = server if server == "cn" else "global"
+    
+    if user_id is None:
+        if qq_openid:
+            user_id = user_binding_storage.get_user_id(qq_openid, server)
+            if user_id is None:
+                return None
+        else:
+            return None
+    
+    count = int(count_str) if count_str else 50
+    server_param = server if server == "cn" else None
+    
+    return ChessInsightCommand(user_id=user_id, count=count, server=server_param)
 
 
-def calculate_rank_statistics(records: List[GameRecord], first_page_records: List[GameRecord] = None) -> str:
+def calculate_rank_statistics(records: List[GameRecord], first_page_records: List[GameRecord] = None, max_elo: int = None) -> str:
     if not records:
         return "未找到游戏记录"
-    
+
     ranks = [r.rank for r in records]
     rank_counter = Counter(ranks)
-    
+
     total_games = len(records)
     avg_rank = sum(ranks) / total_games
     best_rank = min(ranks)
     worst_rank = max(ranks)
-    
+
     top1_count = rank_counter.get(1, 0)
     top3_count = sum(rank_counter.get(i, 0) for i in [1, 2, 3])
     top4_count = sum(rank_counter.get(i, 0) for i in [1, 2, 3, 4])
-    
+
     top1_rate = (top1_count / total_games) * 100
     top3_rate = (top3_count / total_games) * 100
     top4_rate = (top4_count / total_games) * 100
-    
+
     rank_distribution = []
     for rank in sorted(rank_counter.keys()):
         count = rank_counter[rank]
         percentage = (count / total_games) * 100
         rank_distribution.append(f"第{rank}名: {count}局 ({percentage:.1f}%)")
-    
+
     extra_info = ""
     if first_page_records and len(first_page_records) > 0:
         latest_record = first_page_records[0]
         latest_elo = latest_record.elo if latest_record.elo else "N/A"
         latest_time = datetime.fromtimestamp(latest_record.time / 1000).strftime("%Y-%m-%d %H:%M")
-        
+
         recent_10_ranks = [str(r.rank) for r in first_page_records[:10]]
         recent_10_str = "".join(reversed(recent_10_ranks))
-        
+
+        if max_elo is not None:
+            elo_display = f"ELO分数: {latest_elo}/{max_elo}"
+        else:
+            elo_display = f"ELO分数: {latest_elo}"
+
         extra_info = f"""
 📌 最新状态:
-   ELO分数: {latest_elo}
+   {elo_display}
    游戏时间: {latest_time}
    最近10局排名: [{recent_10_str}]"""
-    
+
     result = f"""📊 近{total_games}局战绩统计{extra_info}
 
 🏆 平均排名: {avg_rank:.2f}
@@ -261,8 +276,28 @@ def calculate_rank_statistics(records: List[GameRecord], first_page_records: Lis
 🎯 吃鸡率: {top1_rate:.1f}% ({top1_count}/{total_games})
 🥉 前三率: {top3_rate:.1f}% ({top3_count}/{total_games})
 🏅 前四率: {top4_rate:.1f}% ({top4_count}/{total_games})"""
-    
+
     return result
+
+
+def calculate_top5_pokemons(records: List[GameRecord]) -> str:
+    pokemon_counter = Counter()
+
+    for record in records:
+        if record.pokemons:
+            for pokemon in record.pokemons:
+                pokemon_counter[pokemon.name] += 1
+
+    if not pokemon_counter:
+        return ""
+
+    top5 = pokemon_counter.most_common(5)
+
+    lines = ["\n🐾 常用宝可梦 Top5:"]
+    for i, (pokemon_name, count) in enumerate(top5, 1):
+        lines.append(f"   {i}. {pokemon_name}: {count}次")
+
+    return "\n".join(lines)
 
 
 async def handle_bind(content: str, qq_openid: str) -> Optional[str]:
@@ -288,31 +323,59 @@ async def handle_chess_insight(content: str, qq_openid: Optional[str] = None) ->
         return INSIGHT_HELP
     
     command = parse_chess_insight_command(content, qq_openid)
-    
+
     if not command:
         return None
-    
+
     try:
         first_page_records = await pokemon_chess_api.get_game_history(
             user_id=command.user_id,
             page=1,
             server=command.server
         )
-        
+
         records = await pokemon_chess_api.get_multiple_pages(
             user_id=command.user_id,
             total_games=command.count,
             server=command.server
         )
-        
+
         if not records:
             server_name = "国服" if command.server == "cn" else "国际服"
             return f"未找到用户 {command.user_id} 在{server_name}的游戏记录"
-        
-        statistics = calculate_rank_statistics(records, first_page_records)
+
+        user_stats = user_stats_storage.get_user_stats(command.user_id)
+
+        new_ranks = [r.rank for r in records]
+        new_max_elo = max((r.elo for r in records if r.elo is not None), default=0)
+        latest_game_time = records[0].time if records else 0
+
+        if user_stats:
+            local_latest_time = user_stats.latest_game_time
+
+            if local_latest_time > 0 and latest_game_time <= local_latest_time:
+                new_max_elo = max(new_max_elo, user_stats.max_elo)
+            else:
+                user_stats_storage.update_user_stats(
+                    command.user_id,
+                    new_ranks,
+                    new_max_elo,
+                    latest_game_time
+                )
+        else:
+            user_stats_storage.update_user_stats(
+                command.user_id,
+                new_ranks,
+                new_max_elo,
+                latest_game_time
+            )
+
+        statistics = calculate_rank_statistics(records, first_page_records, max_elo=new_max_elo)
+        top5_pokemons = calculate_top5_pokemons(records)
         server_label = " [国服]" if command.server == "cn" else ""
-        return f"{statistics}{server_label}"
-        
+
+        return f"{statistics}{top5_pokemons}{server_label}"
+
     except Exception as e:
         logger.error(f"Failed to handle chess insight: {e}")
         return f"查询失败: {str(e)}"
@@ -322,18 +385,12 @@ def parse_env_command(content: str) -> Optional[EnvCommand]:
     if re.search(r'/env\s+(-h|--help)', content):
         return None
     
-    pattern = r'/env(?:\s+-(?:p|page)\s+(\d+))?'
-    match = re.search(pattern, content)
+    args = parse_arguments(content)
     
-    if match:
-        page_str = match.group(1)
-        page = int(page_str) if page_str else 1
-        return EnvCommand(page=page)
+    page_str = args.get('p') or args.get('page')
+    page = int(page_str) if page_str else 1
     
-    if content.strip() == "/env":
-        return EnvCommand(page=1)
-    
-    return None
+    return EnvCommand(page=page)
 
 
 async def handle_env(content: str) -> Optional[str]:
@@ -387,25 +444,22 @@ def parse_pkm_command(content: str) -> Optional[PkmCommand]:
     if re.search(r'/pkm\s+(-h|--help)', content):
         return None
     
-    pattern_with_n = r'/pkm\s+-n\s+(\S+)(?:\s+-r\s+(\d+))?'
-    match = re.search(pattern_with_n, content)
+    args = parse_arguments(content)
     
-    if match:
-        name = match.group(1)
-        elo_str = match.group(2)
-        elo = int(elo_str) if elo_str else None
-        return PkmCommand(name=name, elo=elo)
+    name = args.get('n')
+    if name is None:
+        pattern_without_n = r'/pkm\s+(\S+)'
+        match = re.search(pattern_without_n, content)
+        if match:
+            name = match.group(1)
     
-    pattern_without_n = r'/pkm\s+(\S+)(?:\s+-r\s+(\d+))?'
-    match = re.search(pattern_without_n, content)
+    if name is None:
+        return None
     
-    if match:
-        name = match.group(1)
-        elo_str = match.group(2)
-        elo = int(elo_str) if elo_str else None
-        return PkmCommand(name=name, elo=elo)
+    elo_str = args.get('r')
+    elo = int(elo_str) if elo_str else None
     
-    return None
+    return PkmCommand(name=name, elo=elo)
 
 
 async def handle_pkm(content: str) -> Optional[str]:

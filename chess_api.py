@@ -8,11 +8,19 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class PokemonInfo:
+    name: str
+    avatar: str
+    items: List[str]
+
+
+@dataclass
 class GameRecord:
     time: int
     rank: int
     elo: Optional[int] = None
     game_mode: Optional[str] = None
+    pokemons: List[PokemonInfo] = None
 
 
 class PokemonAutoChessAPI:
@@ -55,11 +63,22 @@ class PokemonAutoChessAPI:
             
             records = []
             for item in data:
+                pokemons_data = item.get("pokemons", [])
+                pokemons = [
+                    PokemonInfo(
+                        name=p.get("name", ""),
+                        avatar=p.get("avatar", ""),
+                        items=p.get("items", [])
+                    )
+                    for p in pokemons_data
+                ]
+
                 record = GameRecord(
                     time=item.get("time", 0),
                     rank=item.get("rank", 0),
                     elo=item.get("elo"),
-                    game_mode=item.get("gameMode")
+                    game_mode=item.get("gameMode"),
+                    pokemons=pokemons
                 )
                 records.append(record)
             
