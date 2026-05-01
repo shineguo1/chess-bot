@@ -122,6 +122,10 @@ class QQBotAPI:
                         logger.info("Token expired, clearing cache for retry")
                         return True
                 if 500 <= e.response.status_code < 600:
+                    if "token" in error_text.lower() or "expire" in error_text.lower():
+                        self._access_token = None
+                        logger.info("Token expired in server error, clearing cache for retry")
+                        return True
                     logger.info(f"Server error {e.response.status_code}, retrying")
                     return True
             return False
@@ -180,6 +184,10 @@ class QQBotAPI:
                         logger.info("Token expired, clearing cache for retry")
                         return True
                 if 500 <= e.response.status_code < 600:
+                    if "token" in error_text.lower() or "expire" in error_text.lower():
+                        self._access_token = None
+                        logger.info("Token expired in server error, clearing cache for retry")
+                        return True
                     logger.info(f"Server error {e.response.status_code}, retrying")
                     return True
             return False
