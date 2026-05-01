@@ -49,6 +49,48 @@ async def run_with_timeout(coro, timeout: float = COMMAND_TIMEOUT):
         return None
 
 
+async def send_c2c_message_safe(openid: str, content: str, msg_id: str = None):
+    import traceback
+    try:
+        await qq_bot_api.send_c2c_message(
+            openid=openid,
+            content=content,
+            msg_id=msg_id
+        )
+        return True
+    except Exception as e:
+        logger.error(f"===== MESSAGE SEND FAILED =====")
+        logger.error(f"User OpenID: {openid}")
+        logger.error(f"Message ID: {msg_id}")
+        logger.error(f"Content length: {len(content) if content else 0}")
+        logger.error(f"Error Type: {type(e).__name__}")
+        logger.error(f"Error Message: {str(e)}")
+        logger.error(f"Stack Trace:\n{traceback.format_exc()}")
+        logger.error(f"==============================")
+        return False
+
+
+async def send_group_message_safe(group_openid: str, content: str, msg_id: str = None):
+    import traceback
+    try:
+        await qq_bot_api.send_group_message(
+            group_openid=group_openid,
+            content=content,
+            msg_id=msg_id
+        )
+        return True
+    except Exception as e:
+        logger.error(f"===== GROUP MESSAGE SEND FAILED =====")
+        logger.error(f"Group OpenID: {group_openid}")
+        logger.error(f"Message ID: {msg_id}")
+        logger.error(f"Content length: {len(content) if content else 0}")
+        logger.error(f"Error Type: {type(e).__name__}")
+        logger.error(f"Error Message: {str(e)}")
+        logger.error(f"Stack Trace:\n{traceback.format_exc()}")
+        logger.error(f"======================================")
+        return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("QQ Bot service starting up...")
@@ -185,134 +227,60 @@ async def handle_c2c_message(event_data: dict, is_test: bool = False):
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_c2c_message_safe(user_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied bind result to user {user_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send bind result: {e}")
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
             else:
-                await qq_bot_api.send_c2c_message(
-                    openid=user_openid,
-                    content=ERROR_RETRY_MSG,
-                    msg_id=msg_id
-                )
+                await send_c2c_message_safe(user_openid, ERROR_RETRY_MSG, msg_id)
         
         elif content.startswith("/insight"):
             result = await run_with_timeout(handle_chess_insight(content, user_openid))
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_c2c_message_safe(user_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied insight to user {user_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send insight result: {e}")
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
             else:
-                await qq_bot_api.send_c2c_message(
-                    openid=user_openid,
-                    content=ERROR_RETRY_MSG,
-                    msg_id=msg_id
-                )
+                await send_c2c_message_safe(user_openid, ERROR_RETRY_MSG, msg_id)
         
         elif content.startswith("/env"):
             result = await run_with_timeout(handle_env(content))
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_c2c_message_safe(user_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied env to user {user_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send env result: {e}")
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
             else:
-                await qq_bot_api.send_c2c_message(
-                    openid=user_openid,
-                    content=ERROR_RETRY_MSG,
-                    msg_id=msg_id
-                )
+                await send_c2c_message_safe(user_openid, ERROR_RETRY_MSG, msg_id)
         
         elif content.startswith("/pkm"):
             result = await run_with_timeout(handle_pkm(content))
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_c2c_message_safe(user_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied pkm to user {user_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send pkm result: {e}")
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
             else:
-                await qq_bot_api.send_c2c_message(
-                    openid=user_openid,
-                    content=ERROR_RETRY_MSG,
-                    msg_id=msg_id
-                )
+                await send_c2c_message_safe(user_openid, ERROR_RETRY_MSG, msg_id)
         
         elif content.startswith("/search"):
             result = await run_with_timeout(handle_search(content))
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_c2c_message_safe(user_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied search to user {user_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send search result: {e}")
-                    await qq_bot_api.send_c2c_message(
-                        openid=user_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
             else:
-                await qq_bot_api.send_c2c_message(
-                    openid=user_openid,
-                    content=ERROR_RETRY_MSG,
-                    msg_id=msg_id
-                )
+                await send_c2c_message_safe(user_openid, ERROR_RETRY_MSG, msg_id)
         
         return {"status": "processed"}
     except Exception as e:
         logger.error(f"Failed to handle C2C message: {e}")
+        await send_c2c_message_safe(user_openid, ERROR_RETRY_MSG, msg_id)
         return {"status": "error", "message": str(e)}
 
 
@@ -361,164 +329,60 @@ async def handle_group_message(event_data: dict, is_test: bool = False):
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_group_message_safe(group_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied bind result to group {group_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send bind message: {e}")
-                    try:
-                        await qq_bot_api.send_group_message(
-                            group_openid=group_openid,
-                            content=ERROR_RETRY_MSG,
-                            msg_id=msg_id
-                        )
-                    except:
-                        pass
             else:
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
-                except:
-                    pass
+                await send_group_message_safe(group_openid, ERROR_RETRY_MSG, msg_id)
         
         elif content.startswith("/insight"):
             result = await run_with_timeout(handle_chess_insight(content, member_openid))
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_group_message_safe(group_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied insight to group {group_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send insight message: {e}")
-                    try:
-                        await qq_bot_api.send_group_message(
-                            group_openid=group_openid,
-                            content=ERROR_RETRY_MSG,
-                            msg_id=msg_id
-                        )
-                    except:
-                        pass
             else:
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
-                except:
-                    pass
+                await send_group_message_safe(group_openid, ERROR_RETRY_MSG, msg_id)
         
         elif content.startswith("/env"):
             result = await run_with_timeout(handle_env(content))
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_group_message_safe(group_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied env to group {group_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send env message: {e}")
-                    try:
-                        await qq_bot_api.send_group_message(
-                            group_openid=group_openid,
-                            content=ERROR_RETRY_MSG,
-                            msg_id=msg_id
-                        )
-                    except:
-                        pass
             else:
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
-                except:
-                    pass
+                await send_group_message_safe(group_openid, ERROR_RETRY_MSG, msg_id)
         
         elif content.startswith("/pkm"):
             result = await run_with_timeout(handle_pkm(content))
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_group_message_safe(group_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied pkm to group {group_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send pkm message: {e}")
-                    try:
-                        await qq_bot_api.send_group_message(
-                            group_openid=group_openid,
-                            content=ERROR_RETRY_MSG,
-                            msg_id=msg_id
-                        )
-                    except:
-                        pass
             else:
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
-                except:
-                    pass
+                await send_group_message_safe(group_openid, ERROR_RETRY_MSG, msg_id)
         
         elif content.startswith("/search"):
             result = await run_with_timeout(handle_search(content))
             if result:
                 if is_test:
                     return {"status": "processed", "reply": result}
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=result,
-                        msg_id=msg_id
-                    )
+                success = await send_group_message_safe(group_openid, result, msg_id)
+                if success:
                     logger.info(f"Replied search to group {group_openid}")
-                except Exception as e:
-                    logger.error(f"Failed to send search message: {e}")
-                    try:
-                        await qq_bot_api.send_group_message(
-                            group_openid=group_openid,
-                            content=ERROR_RETRY_MSG,
-                            msg_id=msg_id
-                        )
-                    except:
-                        pass
             else:
-                try:
-                    await qq_bot_api.send_group_message(
-                        group_openid=group_openid,
-                        content=ERROR_RETRY_MSG,
-                        msg_id=msg_id
-                    )
-                except:
-                    pass
+                await send_group_message_safe(group_openid, ERROR_RETRY_MSG, msg_id)
         
         return {"status": "processed"}
     except Exception as e:
         logger.error(f"Failed to handle group message: {e}")
+        await send_group_message_safe(group_openid, ERROR_RETRY_MSG, msg_id)
         return {"status": "error", "message": str(e)}
 
 
