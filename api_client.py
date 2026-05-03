@@ -106,8 +106,9 @@ class QQBotAPI:
         
         def _should_retry(e: Exception) -> bool:
             if isinstance(e, httpx.HTTPStatusError):
+                error_text = e.response.text
+                
                 if 400 <= e.response.status_code < 500:
-                    error_text = e.response.text
                     try:
                         error_data = e.response.json()
                         error_code = error_data.get("err_code")
@@ -168,8 +169,9 @@ class QQBotAPI:
         
         def _should_retry(e: Exception) -> bool:
             if isinstance(e, httpx.HTTPStatusError):
+                error_text = e.response.text
+                
                 if 400 <= e.response.status_code < 500:
-                    error_text = e.response.text
                     try:
                         error_data = e.response.json()
                         error_code = error_data.get("err_code")
